@@ -67,13 +67,13 @@ func InitWebServer() {
 	router.Route("/api", func(r chi.Router) {
 		r.Get("/nextdate", nextDateHandler)
 		// Маршруты для задач
-		//r.Route("/tasks", func(rr chi.Router) {
-		//	rr.Get("/", tasksHandler)
+		//r.Route("/task", func(rr chi.Router) {
 		//	rr.Post("/", createTaskHandler)
-		//		 Методы для одного пользователя
+		//	rr.Get("/", tasksHandler)
+		//		 Методы для одной задачи
 		//		rr.Route("/{id}", func(rri chi.Router) {
-		//		    rri.Use(UserCtx)
-		//		    rri.Get("/", userByIDHandler)
+		//		    rri.Use(TaskCtx)
+		//		    rri.Get("/", taskByIDHandler)
 		//		 Добавить другие методы, такие как PUT, DELETE
 		//		})
 		//})
