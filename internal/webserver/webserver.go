@@ -1,14 +1,16 @@
 package webserverutils
 
 import (
-
 	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"net/http"
+
+	utils "webtasksplannerexample/internal/utils"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -18,10 +20,33 @@ const (
 	defaultHttpServerPort = 7540 //стандартный порт для запуска сервера
 )
 
+func nextDateHandler(w http.ResponseWriter, r *http.Request) {
+	nowStr := r.FormValue("now")
+	dateStr := r.FormValue("date")
+	repeatStr := r.FormValue("repeat")
+	nowDate, err := time.Parse("20060102", nowStr)
+	result := ""
+	if err != nil {
+		log.Println("Ошибка при парсинге поля даты now", err.Error())
+	} else {
+		nextDate, err := utils.NextDate(nowDate, dateStr, repeatStr)
+		if err != nil {
+			log.Println("Ошибка при вычислении nextdate", err.Error())
+		} else {
+			result = nextDate
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	log.Printf("Параметры запроса: now=[%s], date=[%s], repeat=[%s], nextdate=[%s]", nowStr, dateStr, repeatStr, result)
+	w.Write([]byte(result))
+}
+
 func InitWebServer() {
 
-	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	router := chi.NewRouter()
+	router.Use(middleware.Logger)
 
 	port := defaultHttpServerPort
 	workDir, _ := os.Getwd()
@@ -37,9 +62,25 @@ func InitWebServer() {
 	}
 
 	filesDir := http.Dir(filepath.Join(workDir, "web"))
-	FileServer(r, "/", filesDir)
+	FileServer(router, "/", filesDir)
 
-	if err := http.ListenAndServe(":"+strconv.Itoa(port), r); err != nil {
+	router.Route("/api", func(r chi.Router) {
+		r.Get("/nextdate", nextDateHandler)
+		// Маршруты для задач
+		//r.Route("/tasks", func(rr chi.Router) {
+		//	rr.Get("/", tasksHandler)
+		//	rr.Post("/", createTaskHandler)
+		//		 Методы для одного пользователя
+		//		rr.Route("/{id}", func(rri chi.Router) {
+		//		    rri.Use(UserCtx)
+		//		    rri.Get("/", userByIDHandler)
+		//		 Добавить другие методы, такие как PUT, DELETE
+		//		})
+		//})
+		// Другие маршруты API
+	})
+
+	if err := http.ListenAndServe(":"+strconv.Itoa(port), router); err != nil {
 		log.Fatalf("Ошибка при запуске сервера: %s", err.Error())
 		return
 	}

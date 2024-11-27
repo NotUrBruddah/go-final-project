@@ -22,7 +22,6 @@ type Task struct {
 }
 
 func InitDB() (*sql.DB, error) {
-	log.Println("Инициазация БД")
 
 	workDir, _ := os.Getwd()
 
@@ -42,7 +41,6 @@ func InitDB() (*sql.DB, error) {
 	}
 
 	// Подключаемся к базе данных
-	log.Println("Подключение к БД")
 	db, err := sql.Open("sqlite", dbFile)
 	if err != nil {
 		log.Println("Не удалось открыть БД " + dbFile)
@@ -63,7 +61,6 @@ func InitDB() (*sql.DB, error) {
 	}
 
 	// Создаём индекс по полю 'date'
-	log.Println("Создаем Индекс")
 	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_date ON scheduler(date)`); err != nil {
 		log.Println("не удалось создать индекс по полю date")
 		return nil, fmt.Errorf("не удалось создать индекс по полю 'date': %w", err)
