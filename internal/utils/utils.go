@@ -13,7 +13,7 @@ var validFormats = []string{
 	`^d\s[1-9]$|^d\s([1-3]\d{1,2})$|^d\s400$`, // Формат "d <число от 1 до 400>"
 }
 
-func isValidFormat(input string) bool {
+func IsValidFormat(input string) bool {
 	for _, pattern := range validFormats {
 		match, _ := regexp.MatchString(pattern, input)
 		if match {
@@ -35,7 +35,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 	}
 
 	//валидируем repeat переменную
-	if !(isValidFormat(repeat)) {
+	if !(IsValidFormat(repeat)) {
 		return "", fmt.Errorf("некорректный формат repeat")
 	}
 
