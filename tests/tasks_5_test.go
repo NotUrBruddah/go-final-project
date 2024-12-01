@@ -101,8 +101,12 @@ func TestTasks(t *testing.T) {
 		return
 	}
 	tasks = getTasks(t, "УК")
+	fmt.Println(tasks)
 	assert.Equal(t, len(tasks), 1)
+
 	tasks = getTasks(t, now.Format(`02.01.2006`))
+	fmt.Println(now.Format(`02.01.2006`))
+	fmt.Println(tasks)
 	assert.Equal(t, len(tasks), 3)
 
 }

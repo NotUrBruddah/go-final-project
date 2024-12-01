@@ -10,7 +10,9 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var db *sql.DB
+var (
+	db *sql.DB
+)
 
 func InitDB(dbFilePath string) (*sql.DB, error) {
 	var err error
@@ -69,12 +71,38 @@ func AddTask(task models.Task) (int64, error) {
 	return id, nil
 }
 
-func GetTasks() ([]models.FullTask, error) {
-	rows, err := db.Query(`
-		SELECT id, date, title, comment, repeat
-		FROM scheduler
-		ORDER BY date ASC LIMIT 50
-	`)
+func GetTasks(searchString string, searchIsDate bool) ([]models.FullTask, error) {
+	var (
+		err  error
+		rows *sql.Rows
+	)
+	if searchString != "" && searchIsDate {
+		fmt.Println("AAAAAAAAAAAA")
+		rows, err = db.Query(`
+			SELECT id, date, title, comment, repeat
+			FROM scheduler WHERE date = ?
+			ORDER BY date ASC LIMIT 50`,
+			searchString,
+		)
+	} else if searchString != "" && !searchIsDate {
+		fmt.Println("dddddddddddddddddd")
+		searchString = `%` + searchString + `%`
+		rows, err = db.Query(`
+			SELECT id, date, title, comment, repeat
+			FROM scheduler WHERE LOWER(title) LIKE LOWER(?) 
+			OR LOWER(comment) LIKE LOWER(?)
+			ORDER BY date ASC LIMIT 50`,
+			searchString,
+			searchString,
+		)
+	} else {
+		fmt.Println("eeeeeeeeeeeeeeeeeee")
+		rows, err = db.Query(`
+			SELECT id, date, title, comment, repeat
+			FROM scheduler
+			ORDER BY date ASC LIMIT 50
+		`)
+	}
 
 	if err != nil {
 		return nil, err

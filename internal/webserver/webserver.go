@@ -66,20 +66,17 @@ func FileServer(r chi.Router, path string, root http.FileSystem) {
 	})
 }
 
-var validFormats = []string{
-	// Формат "y"
-	`^y$`,
-	// Формат "d <число от 1 до 400>"
-	`^d\s(([1-9])|([1-9]\d)|[1-3]\d{2}|(400))$`,
-	// Формат "w <числа от 1 до 7 через запятую>, при этом не более 7 штук
-	`^w\s[1-7](,[1-7]){0,6}$`,
-	// Формат "m <числа от 1 до 31 через запятую>, при этом не более 31 штук,
+// Слайс из валидных регэкспов для поля repeat
+var repeatValidFormats = []string{
+	`^y$`, // Формат "y"
+	`^d\s(([1-9])|([1-9]\d)|[1-3]\d{2}|(400))$`, // Формат "d <число от 1 до 400>"
+	`^w\s[1-7](,[1-7]){0,6}$`,                   // Формат "w <числа от 1 до 7 через запятую>, при этом не более 7 штук
+	`^m\s((\-[12])|(0?[1-9])|([12]\d)|(3[01]))((,\-[12])|(,[1-9])|(,[12]\d)|(,3[01])){0,30}(\s((0?[1-9])|(1[012]))((,[1-9])|(,1[012])){0,11})?$`,
+	// Формат "m <числа от 1 до 31 через запятую>, при этом не более 31 штуки, числа 1 - 9 могут иметь написание 01 02 и т.д до 09
 	// далее опционально через пробел <числа от 1 до 12 через запятую> не более 12 штук
-	`^m\s((\-[12])|([1-9])|([12]\d)|(3[01]))((,\-[12])|(,[1-9])|(,[12]\d)|(,3[01])){0,30}(\s(([1-9])|(1[012]))((,[1-9])|(,1[012])){0,11})?$`,
 }
 
 func TaskValidate(t models.FullTask) error {
-
 	if t.ID == "" {
 		return errors.New("некорректный формат поля ID")
 	} else if _, err := strconv.Atoi(t.ID); err != nil {
@@ -96,26 +93,24 @@ func TaskValidate(t models.FullTask) error {
 		return errors.New("поле Title должно быть заполнено")
 	}
 
-	if t.Repeat != "" && !utils.IsValidFormat(t.Repeat, validFormats) {
+	if t.Repeat != "" && !utils.IsValidFormat(t.Repeat, repeatValidFormats) {
 		return errors.New("поле Repeat имеет неверный формат")
 	}
 
 	return nil
 }
 
+// Функция для подсчета даты по правилам повтора
 func NextDate(now time.Time, date string, repeat string) (string, error) {
-	//преобразуем date к формату time.Time
 	startDate, err := time.Parse("20060102", date)
 	if err != nil {
 		return "", err
 	}
-
 	if repeat == "" {
 		return "", fmt.Errorf("пустое значение repeat")
 	}
-
 	//валидируем repeat переменную
-	if !(utils.IsValidFormat(repeat, validFormats)) {
+	if !(utils.IsValidFormat(repeat, repeatValidFormats)) {
 		return "", fmt.Errorf("некорректный формат repeat")
 	}
 
@@ -135,7 +130,61 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 		}
 		return nextDate.Format("20060102"), nil
 	case "w":
+		repeatdays, err := utils.StringToInt(strings.Split(substrs[1], ","))
+		if err != nil {
+			return "", fmt.Errorf("неподдерживаемый формат")
+		}
+		var nextDateSlice []time.Time
+		for i := 0; i < len(repeatdays); i++ {
+			closestDate := startDate
+			if closestDate = utils.GetClosestWeekday(repeatdays[i], startDate); closestDate.Before(now) || closestDate.Equal(now) {
+				closestDate = utils.GetClosestWeekday(repeatdays[i], now)
+			}
+			nextDateSlice = append(nextDateSlice, closestDate)
+		}
+		return utils.FindMinDate(nextDateSlice).Format("20060102"), nil
 	case "m":
+		if len(substrs) == 2 {
+			repeatmonthdays, err := utils.StringSliceToIntSortAndRemoveDuplicates(strings.Split(substrs[1], ","))
+			if err != nil {
+				return "", fmt.Errorf("неподдерживаемый формат")
+			}
+			var nextDateSlice []time.Time
+			for i := 0; i < len(repeatmonthdays); i++ {
+				closestDate := startDate
+				if closestDate = utils.GetClosesDateOfMonth(repeatmonthdays[i], int(startDate.Month()), startDate); closestDate.Before(now) || closestDate.Equal(now) {
+					if closestDate = utils.GetClosesDateOfMonth(repeatmonthdays[i], int(now.Month()), now); closestDate.Before(now) || closestDate.Equal(now) {
+						closestDate = utils.GetClosesDateOfMonth(repeatmonthdays[i], int(now.Month())+1, now)
+					}
+				}
+				nextDateSlice = append(nextDateSlice, closestDate)
+			}
+			return utils.FindMinDate(nextDateSlice).Format("20060102"), nil
+		} else if len(substrs) == 3 {
+
+			repeatmonthdays, err := utils.StringSliceToIntSortAndRemoveDuplicates(strings.Split(substrs[1], ","))
+			if err != nil {
+				return "", fmt.Errorf("неподдерживаемый формат")
+			}
+			repeatmonths, err := utils.StringSliceToIntSortAndRemoveDuplicates(strings.Split(substrs[2], ","))
+			if err != nil {
+				return "", fmt.Errorf("неподдерживаемый формат")
+			}
+			var nextDateSlice []time.Time
+			for i := 0; i < len(repeatmonthdays); i++ {
+				for j := 0; j < len(repeatmonths); j++ {
+					closestDate := startDate
+					if closestDate = utils.GetDateOfMonth(repeatmonthdays[i], repeatmonths[j], now, startDate); closestDate.Before(now) || closestDate.Equal(now) {
+						continue
+					} else {
+						nextDateSlice = append(nextDateSlice, closestDate)
+					}
+				}
+			}
+			fmt.Println(utils.FindMinDate(nextDateSlice).Format("20060102"))
+			return utils.FindMinDate(nextDateSlice).Format("20060102"), nil
+		}
+
 	default:
 		return "", fmt.Errorf("неподдерживаемый формат")
 	}
@@ -188,7 +237,6 @@ func postTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//now := time.Now()
 	now, _ := time.Parse("20060102", time.Now().Format("20060102"))
 
 	if task.Date == "" {
@@ -234,7 +282,17 @@ func postTaskHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func getTasksHandler(w http.ResponseWriter, r *http.Request) {
-	tasks, err := dbutils.GetTasks()
+	//проверяем наличие и формат данных в поисковой строке
+	searchDateBool := false
+	searchStr := ""
+	searchStr = r.URL.Query().Get("search")
+	searchDate, err := time.Parse("02.01.2006", searchStr)
+	if err == nil {
+		searchDateBool = true
+		searchStr = searchDate.Format("20060102")
+	}
+
+	tasks, err := dbutils.GetTasks(searchStr, searchDateBool)
 	if err != nil {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: err.Error()}
 		errResp, _ := json.Marshal(errorMsg)

@@ -58,7 +58,11 @@ func initServiceConfig() models.ServiceConfig {
 	envHttpPort := os.Getenv("TODO_PORT")
 	envHttpWebDir := os.Getenv("TODO_WEBDIR")
 
-	workDir, _ := os.Getwd()
+	//workDir, _ := os.Getwd()
+	workDir, err := os.Executable()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if envDBFilePath == "" {
 		envDBFilePath = filepath.Join(filepath.Dir(workDir), defaultDBFilePath)
