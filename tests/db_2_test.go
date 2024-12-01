@@ -47,7 +47,9 @@ func TestDB(t *testing.T) {
 	VALUES (?, 'Todo', 'Комментарий', '')`, today)
 	assert.NoError(t, err)
 
-	id, err := res.LastInsertId()
+	//выдается ошибка this value of err is never used (SA4006)go-staticcheck, поэтому скорректировано в тесте
+	//id, err := res.LastInsertId()
+	id, _ := res.LastInsertId()
 
 	var task Task
 	err = db.Get(&task, `SELECT * FROM scheduler WHERE id=?`, id)

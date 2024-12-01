@@ -10,11 +10,14 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-func InitDB(conf models.ServiceConfig) (*sql.DB, error) {
+var db *sql.DB
 
-	if _, err := os.Stat(conf.DbFilePath); errors.Is(err, os.ErrNotExist) {
+func InitDB(dbFilePath string) (*sql.DB, error) {
+	var err error
+
+	if _, err := os.Stat(dbFilePath); errors.Is(err, os.ErrNotExist) {
 		// Файла нет, создаем новую базу данных
-		f, err := os.Create(conf.DbFilePath)
+		f, err := os.Create(dbFilePath)
 		if err != nil {
 			return nil, fmt.Errorf("не удалось создать файл базы данных: %s", err.Error())
 		}
@@ -22,13 +25,13 @@ func InitDB(conf models.ServiceConfig) (*sql.DB, error) {
 	}
 
 	// Подключаемся к базе данных
-	db, err := sql.Open("sqlite", conf.DbFilePath)
+	db, err = sql.Open("sqlite", dbFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("не удалось открыть базу данных: %w", err)
 	}
 
 	// Проверяем наличие таблицы 'scheduler' и создаем ее, если необходимо
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS scheduler (
+	if _, err = db.Exec(`CREATE TABLE IF NOT EXISTS scheduler (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date TEXT NOT NULL,
         title TEXT NOT NULL,
@@ -39,15 +42,15 @@ func InitDB(conf models.ServiceConfig) (*sql.DB, error) {
 	}
 
 	// Создаём индекс по полю 'date'
-	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_date ON scheduler(date)`); err != nil {
+	if _, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_date ON scheduler(date)`); err != nil {
 		return nil, fmt.Errorf("не удалось создать индекс по полю 'date': %w", err)
 	}
 
 	return db, nil
 }
 
-func DbAddTask(conf models.ServiceConfig, task models.Task) (int64, error) {
-	result, err := conf.DBobject.Exec(
+func AddTask(task models.Task) (int64, error) {
+	result, err := db.Exec(
 		"INSERT INTO scheduler (date, title, comment, repeat) VALUES (?, ?, ?, ?)",
 		task.Date,
 		task.Title,
@@ -66,8 +69,8 @@ func DbAddTask(conf models.ServiceConfig, task models.Task) (int64, error) {
 	return id, nil
 }
 
-func DbGetTasks(conf models.ServiceConfig) ([]models.Task, error) {
-	rows, err := conf.DBobject.Query(`
+func GetTasks() ([]models.FullTask, error) {
+	rows, err := db.Query(`
 		SELECT id, date, title, comment, repeat
 		FROM scheduler
 		ORDER BY date ASC LIMIT 50
@@ -78,9 +81,9 @@ func DbGetTasks(conf models.ServiceConfig) ([]models.Task, error) {
 	}
 	defer rows.Close()
 
-	tasks := []models.Task{}
+	tasks := []models.FullTask{}
 	for rows.Next() {
-		var task models.Task
+		var task models.FullTask
 		if err := rows.Scan(&task.ID, &task.Date, &task.Title, &task.Comment, &task.Repeat); err != nil {
 			return nil, err
 		}
@@ -90,25 +93,25 @@ func DbGetTasks(conf models.ServiceConfig) ([]models.Task, error) {
 	return tasks, nil
 }
 
-func DBGetTaskByID(conf models.ServiceConfig, id string) (models.Task, error) {
+func GetTaskByID(id string) (models.FullTask, error) {
 
-	row := conf.DBobject.QueryRow(`SELECT id, date, title, comment, repeat FROM scheduler WHERE id = $1`, id)
+	var task models.FullTask
 
-	task := models.Task{ID: id}
+	row := db.QueryRow(`SELECT id, date, title, comment, repeat FROM scheduler WHERE id = $1`, id)
 
 	err := row.Scan(&task.ID, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return models.Task{}, fmt.Errorf("задача не найдена")
+			return models.FullTask{}, fmt.Errorf("задача не найдена")
 		}
-		return models.Task{}, err
+		return models.FullTask{}, err
 	}
 	return task, nil
 }
 
-func DBUpdateTask(conf models.ServiceConfig, task models.Task) error {
+func UpdateTask(task models.FullTask) error {
 
-	_, err := conf.DBobject.Exec(`UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?`,
+	_, err := db.Exec(`UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?`,
 		task.Date,
 		task.Title,
 		task.Comment,
@@ -123,9 +126,9 @@ func DBUpdateTask(conf models.ServiceConfig, task models.Task) error {
 	return nil
 }
 
-func DBDeleteTaskByID(conf models.ServiceConfig, id string) error {
+func DeleteTaskByID(id string) error {
 
-	_, err := conf.DBobject.Exec(`DELETE FROM scheduler WHERE id = ?`, id )
+	_, err := db.Exec(`DELETE FROM scheduler WHERE id = ?`, id)
 
 	if err != nil {
 		return err
