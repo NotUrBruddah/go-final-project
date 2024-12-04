@@ -5,18 +5,21 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"net/http"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 
 	dbutils "webtasksplannerexample/internal/db"
 	models "webtasksplannerexample/internal/models"
 	utils "webtasksplannerexample/internal/utils"
+)
 
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+const (
+	dateTimeFormat string = "20060102"
 )
 
 func InitWebServer(conf models.ServiceConfig) error {
@@ -85,7 +88,7 @@ func TaskValidate(t models.FullTask) error {
 
 	if t.Date == "" {
 		return errors.New("поле Date должно быть заполнено")
-	} else if _, err := time.Parse("20060102", t.Date); err != nil {
+	} else if _, err := time.Parse(dateTimeFormat, t.Date); err != nil {
 		return errors.New("ошибка при парсинге поля даты")
 	}
 
@@ -102,7 +105,7 @@ func TaskValidate(t models.FullTask) error {
 
 // Функция для подсчета даты по правилам повтора
 func NextDate(now time.Time, date string, repeat string) (string, error) {
-	startDate, err := time.Parse("20060102", date)
+	startDate, err := time.Parse(dateTimeFormat, date)
 	if err != nil {
 		return "", err
 	}
@@ -121,14 +124,14 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 		for nextDate.Before(now) || nextDate.Equal(now) {
 			nextDate = nextDate.AddDate(1, 0, 0)
 		}
-		return nextDate.Format("20060102"), nil
+		return nextDate.Format(dateTimeFormat), nil
 	case "d":
 		days, _ := strconv.Atoi(substrs[1])
 		nextDate := startDate.AddDate(0, 0, days)
 		for nextDate.Before(now) || nextDate.Equal(now) {
 			nextDate = nextDate.AddDate(0, 0, days)
 		}
-		return nextDate.Format("20060102"), nil
+		return nextDate.Format(dateTimeFormat), nil
 	case "w":
 		repeatdays, err := utils.StringToInt(strings.Split(substrs[1], ","))
 		if err != nil {
@@ -142,7 +145,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 			}
 			nextDateSlice = append(nextDateSlice, closestDate)
 		}
-		return utils.FindMinDate(nextDateSlice).Format("20060102"), nil
+		return utils.FindMinDate(nextDateSlice).Format(dateTimeFormat), nil
 	case "m":
 		if len(substrs) == 2 {
 			repeatmonthdays, err := utils.StringSliceToIntSortAndRemoveDuplicates(strings.Split(substrs[1], ","))
@@ -159,7 +162,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 				}
 				nextDateSlice = append(nextDateSlice, closestDate)
 			}
-			return utils.FindMinDate(nextDateSlice).Format("20060102"), nil
+			return utils.FindMinDate(nextDateSlice).Format(dateTimeFormat), nil
 		} else if len(substrs) == 3 {
 
 			repeatmonthdays, err := utils.StringSliceToIntSortAndRemoveDuplicates(strings.Split(substrs[1], ","))
@@ -181,8 +184,8 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 					}
 				}
 			}
-			fmt.Println(utils.FindMinDate(nextDateSlice).Format("20060102"))
-			return utils.FindMinDate(nextDateSlice).Format("20060102"), nil
+			fmt.Println(utils.FindMinDate(nextDateSlice).Format(dateTimeFormat))
+			return utils.FindMinDate(nextDateSlice).Format(dateTimeFormat), nil
 		}
 
 	default:
@@ -196,7 +199,7 @@ func getNextDateHandler(w http.ResponseWriter, r *http.Request) {
 	nowStr := r.FormValue("now")
 	dateStr := r.FormValue("date")
 	repeatStr := r.FormValue("repeat")
-	nowDate, err := time.Parse("20060102", nowStr)
+	nowDate, err := time.Parse(dateTimeFormat, nowStr)
 	if err != nil {
 		log.Println("Ошибка при парсинге поля даты now", err.Error())
 	} else {
@@ -226,40 +229,48 @@ func postTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if err := decoder.Decode(&task); err != nil {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: err.Error()}
 		errResp, _ := json.Marshal(errorMsg)
-		w.Write(errResp)
+		if _, err := w.Write(errResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
 	if task.Title == "" {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: "Обязательное поле 'title' отсутствует"}
 		errResp, _ := json.Marshal(errorMsg)
-		w.Write(errResp)
+		if _, err := w.Write(errResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
-	now, _ := time.Parse("20060102", time.Now().Format("20060102"))
+	now, _ := time.Parse(dateTimeFormat, time.Now().Format(dateTimeFormat))
 
 	if task.Date == "" {
-		task.Date = now.Format("20060102")
+		task.Date = now.Format(dateTimeFormat)
 	}
-	date, err := time.Parse("20060102", task.Date)
+	date, err := time.Parse(dateTimeFormat, task.Date)
 	if err != nil {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: "Дата имеет неверный формат"}
 		errResp, _ := json.Marshal(errorMsg)
-		w.Write(errResp)
+		if _, err := w.Write(errResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 	nextDate := ""
 	if task.Repeat != "" {
-		nextDate, err = NextDate(now, date.Format("20060102"), task.Repeat)
+		nextDate, err = NextDate(now, date.Format(dateTimeFormat), task.Repeat)
 		if err != nil {
 			errorMsg := models.HTTPJSONErrorMessageResponse{Error: err.Error()}
 			errResp, _ := json.Marshal(errorMsg)
-			w.Write(errResp)
+			if _, err := w.Write(errResp); err != nil {
+				http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+			}
 			return
 		}
 	} else {
-		task.Date = now.Format("20060102")
+		task.Date = now.Format(dateTimeFormat)
 	}
 
 	if date.Before(now) && nextDate != "" {
@@ -271,12 +282,16 @@ func postTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: err.Error()}
 		errResp, _ := json.Marshal(errorMsg)
-		w.Write(errResp)
+		if _, err := w.Write(errResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	} else {
 		respData := models.HTTPJSONResponseID{ID: id}
 		res, _ := json.Marshal(respData)
-		w.Write(res)
+		if _, err := w.Write(res); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 }
@@ -289,7 +304,7 @@ func getTasksHandler(w http.ResponseWriter, r *http.Request) {
 	searchDate, err := time.Parse("02.01.2006", searchStr)
 	if err == nil {
 		searchDateBool = true
-		searchStr = searchDate.Format("20060102")
+		searchStr = searchDate.Format(dateTimeFormat)
 	}
 
 	tasks, err := dbutils.GetTasks(searchStr, searchDateBool)
@@ -297,7 +312,9 @@ func getTasksHandler(w http.ResponseWriter, r *http.Request) {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: err.Error()}
 		errResp, _ := json.Marshal(errorMsg)
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-		w.Write(errResp)
+		if _, err := w.Write(errResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -309,7 +326,9 @@ func getTasksHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-	w.Write(jsonResp)
+	if _, err := w.Write(jsonResp); err != nil {
+		http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+	}
 
 }
 
@@ -322,7 +341,9 @@ func getTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if idParam == "" {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: "Не указан идентификатор"}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -330,7 +351,9 @@ func getTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: "Не указан идентификатор"}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -339,17 +362,23 @@ func getTaskHandler(w http.ResponseWriter, r *http.Request) {
 		if err.Error() == "задача не найдена" {
 			errorMsg := models.HTTPJSONErrorMessageResponse{Error: "задача не найдена"}
 			jsonResp, _ := json.Marshal(errorMsg)
-			w.Write(jsonResp)
+			if _, err := w.Write(jsonResp); err != nil {
+				http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+			}
 			return
 		}
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: "задача не найдена"}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
 	jsonResp, _ := json.Marshal(task)
-	w.Write(jsonResp)
+	if _, err := w.Write(jsonResp); err != nil {
+		http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+	}
 }
 
 func putTaskHandler(w http.ResponseWriter, r *http.Request) {
@@ -361,7 +390,9 @@ func putTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: "Задача не найдена"}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -370,7 +401,9 @@ func putTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if err := TaskValidate(task); err != nil {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: err.Error()}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -378,14 +411,18 @@ func putTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: err.Error()}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
 	if currentTask.ID == "" {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: "Задача не найдена"}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -393,12 +430,17 @@ func putTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: err.Error()}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
 	// Возвращаем пустой JSON-объект в случае успеха
-	w.Write([]byte("{}"))
+	if _, err := w.Write([]byte("{}")); err != nil {
+		http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+	}
+
 }
 
 func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
@@ -409,7 +451,9 @@ func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if idParam == "" {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: "не указан идентификатор"}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -417,7 +461,9 @@ func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: "неверный формат идентификатора"}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -426,12 +472,16 @@ func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
 		if err.Error() == "задача не найдена" {
 			errorMsg := models.HTTPJSONErrorMessageResponse{Error: "задача не найдена"}
 			jsonResp, _ := json.Marshal(errorMsg)
-			w.Write(jsonResp)
+			if _, err := w.Write(jsonResp); err != nil {
+				http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+			}
 			return
 		}
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: "задача не найдена"}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -440,20 +490,26 @@ func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			errorMsg := models.HTTPJSONErrorMessageResponse{Error: err.Error()}
 			jsonResp, _ := json.Marshal(errorMsg)
-			w.Write(jsonResp)
+			if _, err := w.Write(jsonResp); err != nil {
+				http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+			}
 			return
 		}
 
-		w.Write([]byte("{}"))
+		if _, err := w.Write([]byte("{}")); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
-	now, _ := time.Parse("20060102", time.Now().Format("20060102"))
+	now, _ := time.Parse(dateTimeFormat, time.Now().Format(dateTimeFormat))
 	nextDate, err := NextDate(now, currentTask.Date, currentTask.Repeat)
 	if err != nil {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: err.Error()}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -471,12 +527,16 @@ func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: err.Error()}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
 	// Возвращаем пустой JSON-объект в случае успеха
-	w.Write([]byte("{}"))
+	if _, err := w.Write([]byte("{}")); err != nil {
+		http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+	}
 
 }
 
@@ -488,7 +548,9 @@ func deleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if idParam == "" {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: "Не указан идентификатор"}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -496,7 +558,9 @@ func deleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: "Неверный формат идентификатора"}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -504,10 +568,14 @@ func deleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		errorMsg := models.HTTPJSONErrorMessageResponse{Error: err.Error()}
 		jsonResp, _ := json.Marshal(errorMsg)
-		w.Write(jsonResp)
+		if _, err := w.Write(jsonResp); err != nil {
+			http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+		}
 		return
 	}
 
 	// Возвращаем пустой JSON-объект в случае успеха
-	w.Write([]byte("{}"))
+	if _, err := w.Write([]byte("{}")); err != nil {
+		http.Error(w, "ошибка записи ответа", http.StatusInternalServerError)
+	}
 }

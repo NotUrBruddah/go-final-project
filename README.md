@@ -9,7 +9,9 @@
     через переменную окружения `TODO_PORT`
 - задание со `*`, возможность определять путь к БД
     через переменную окружения `TODO_DBFILE` 
-- задание со `*`, реализованы правила повторения задач `Еженедельно` и `Ежемесячно` 
+- задание со `*`, реализованы правила повторения задач `Еженедельно` и `Ежемесячно`
+- задание со `*`, реализован `Поиск` 
+- задание со `*`, создан `Dockerfile` для сборки образа и запуска приложения в Docker(ниже см. описание сборки и запуска)  
 
 ## Доступны переменные окружения:
 - `TODO_PORT` - порт, вебсервера для запуска
@@ -47,17 +49,23 @@ package tests
 var Port = 7540
 var DBFile = "../dbdata/scheduler.db"
 var FullNextDate = true
-var Search = false
+var Search = true
 var Token = ``
 ```
 
+## Docker
+- сборка образа
+```
+docker build -t my-go-app:latest .
 
-## TO DO List(не выполнео, задачи со звездочкой):
+```
+- запуск контейнера
+```
+docker run -d -p 7540:7540 --name my-go-app -e TODO_PORT="7540" -e TODO_DBFILE="dbdata/scheduler.db" -e TODO_WEBDIR="web" my-go-app:latest
 
-- поиск задач
+```
+
+## TO DO List(НЕ ВЫПОЛНЕНО, задачи со *):
 - авторизация
-- docker образ 
-- отладка запуска контейнера
-(docker run -d -p 7540:7540 --name my-go-app -e TODO_PORT="7540" -e TODO_DBFILE="dbdata/scheduler.db" -e TODO_WEBDIR="web" my-go-app:latest)
 
 

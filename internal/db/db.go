@@ -5,17 +5,44 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"webtasksplannerexample/internal/models"
 
 	_ "modernc.org/sqlite"
+)
+
+const (
+	maxRowCountLimit int = 50
 )
 
 var (
 	db *sql.DB
 )
 
+func createDirPathIfNotExist(path string) error {
+	var (
+		err error
+	)
+
+	dbDir := filepath.Join(path, "..")
+	if _, err = os.Stat(dbDir); os.IsNotExist(err) {
+		err = os.MkdirAll(dbDir, 0755)
+		if err != nil {
+			return err
+		}
+	}
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func InitDB(dbFilePath string) (*sql.DB, error) {
 	var err error
+
+	if err = createDirPathIfNotExist(dbFilePath); err != nil {
+		return nil, fmt.Errorf("не удалось создать каталоги для размещения файла базы данных: %s", err.Error())
+	}
 
 	if _, err := os.Stat(dbFilePath); errors.Is(err, os.ErrNotExist) {
 		// Файла нет, создаем новую базу данных
@@ -35,10 +62,10 @@ func InitDB(dbFilePath string) (*sql.DB, error) {
 	// Проверяем наличие таблицы 'scheduler' и создаем ее, если необходимо
 	if _, err = db.Exec(`CREATE TABLE IF NOT EXISTS scheduler (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        date TEXT NOT NULL,
-        title TEXT NOT NULL,
-        comment TEXT,
-        repeat TEXT
+        date VARCHAR(8) NOT NULL,
+        title VARCHAR(64) NOT NULL,
+        comment TEXT CHECK(length(comment) <= 512),
+        repeat  VARCHAR(128)
     )`); err != nil {
 		return nil, fmt.Errorf("не удалось создать таблицу 'scheduler': %w", err)
 	}
@@ -77,31 +104,31 @@ func GetTasks(searchString string, searchIsDate bool) ([]models.FullTask, error)
 		rows *sql.Rows
 	)
 	if searchString != "" && searchIsDate {
-		fmt.Println("AAAAAAAAAAAA")
 		rows, err = db.Query(`
 			SELECT id, date, title, comment, repeat
 			FROM scheduler WHERE date = ?
-			ORDER BY date ASC LIMIT 50`,
+			ORDER BY date ASC LIMIT ?`,
 			searchString,
+			maxRowCountLimit,
 		)
 	} else if searchString != "" && !searchIsDate {
-		fmt.Println("dddddddddddddddddd")
 		searchString = `%` + searchString + `%`
 		rows, err = db.Query(`
 			SELECT id, date, title, comment, repeat
 			FROM scheduler WHERE LOWER(title) LIKE LOWER(?) 
 			OR LOWER(comment) LIKE LOWER(?)
-			ORDER BY date ASC LIMIT 50`,
+			ORDER BY date ASC LIMIT ?`,
 			searchString,
 			searchString,
+			maxRowCountLimit,
 		)
 	} else {
-		fmt.Println("eeeeeeeeeeeeeeeeeee")
 		rows, err = db.Query(`
 			SELECT id, date, title, comment, repeat
 			FROM scheduler
-			ORDER BY date ASC LIMIT 50
-		`)
+			ORDER BY date ASC LIMIT ?`,
+			maxRowCountLimit,
+		)
 	}
 
 	if err != nil {
@@ -116,6 +143,9 @@ func GetTasks(searchString string, searchIsDate bool) ([]models.FullTask, error)
 			return nil, err
 		}
 		tasks = append(tasks, task)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return tasks, nil

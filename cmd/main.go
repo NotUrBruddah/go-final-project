@@ -1,12 +1,11 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"os"
 	"path/filepath"
 	"strconv"
-
-	"database/sql"
 
 	"github.com/joho/godotenv"
 
@@ -37,6 +36,8 @@ func main() {
 	}
 	defer db.Close()
 
+	log.Println("Запуск web-сервера на порту [", serviceConfig.HTTPServerPort, "]...")
+
 	err = webserverutils.InitWebServer(serviceConfig)
 	if err != nil {
 		log.Fatal("Ошибка запуска web-сервера:", err)
@@ -58,14 +59,16 @@ func initServiceConfig() models.ServiceConfig {
 	envHttpPort := os.Getenv("TODO_PORT")
 	envHttpWebDir := os.Getenv("TODO_WEBDIR")
 
-	//workDir, _ := os.Getwd()
-	workDir, err := os.Executable()
+	workDir, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	strDBPath := ""
 	if envDBFilePath == "" {
-		envDBFilePath = filepath.Join(filepath.Dir(workDir), defaultDBFilePath)
+		strDBPath = filepath.Join(workDir, defaultDBFilePath)
+	} else {
+		strDBPath = filepath.Join(workDir, envDBFilePath)
 	}
 
 	iHttpport := defaultHTTPPort
@@ -77,7 +80,7 @@ func initServiceConfig() models.ServiceConfig {
 		envHttpWebDir = filepath.Join(workDir, defaultHTTPWebDir)
 	}
 
-	s.DbFilePath = envDBFilePath
+	s.DbFilePath = strDBPath
 	s.HTTPServerPort = iHttpport
 	s.HTTPWebDir = envHttpWebDir
 
