@@ -1,0 +1,95 @@
+# Binaries for programs and dependencies
+build/
+dbdata/
+
+# Compiled Go binaries
+*.exe
+*.test
+*.out
+
+# Object files from compiling
+*.a
+*.so
+*.o
+
+# Go build artifacts
+*.bak
+*.zip
+*.tar.gz
+*.tbz
+*.tgz
+*.db
+*.trash-*
+*_*/
+!*.doc
+!*.txt
+*.ex
+*.DS_Store
+*.rsrc
+*.reveal.hg/
+.cproject
+.xcworkspace/
+.svn/
+.DS_Store?
+Icon?
+*.sublime-workspace
+*.suo
+*.safariCache.tdata
+*.zsh-History
+*.ipch
+*.lockup
+*.xcuserdata
+.profile
+*.fla
+*.localstorage
+*.orig
+*.lproj
+.DS_Store
+.ds_store
+Google Chrome Help.localized
+info.plist
+ohsas.plist
+Saved Application State.appiconset.plist
+.dvdcssversion.plist
+Entitlements.plist
+CodeResources
+Entitlement.icns
+Installed Checksums
+DS_StorageCoordinated
+*.moved-elsewhere
+AppleTV
+Watch App Store.app
+binary
+build
+Profile DocumentType.plist
+Entitlemen.ts
+iTunesArtwork
+Screenshots
+Applcation
+Audio Previews
+Cache.db
+Entitles
+indexAssistance.plist
+JavaScriptCore.plist
+MainStoryboard.precomps
+Network
+QuartzComposer.Storyboardc
+Settings
+systemlog.txt
+*.sdef
+DataEventRecord
+Generic.xib
+libprecompiled.1
+generic.xib
+*.daFont
+basicHTML.pdf
+BasicHTML.stringref
+BuildableIndex.xcindex2
+XCUserState.xcuserstate
+XCConfigurationManager.manifest
+AppIcon20x20.png
+*.pbxindex
+MainAssetCatalog.generated
+Entitled
+BuildInfo.plist
+*.framework
